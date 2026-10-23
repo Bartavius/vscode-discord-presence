@@ -108,7 +108,7 @@ test('handshakes, waits for READY, then sends SET_ACTIVITY', async () => {
 	const ipc = new DiscordIpc('123456789012345678', () => {});
 	await ipc.connect([path.join(dir, 'missing'), path.join(dir, 'ready')], 2_000);
 
-	const activity = buildActivity({ languageId: 'rust', debugging: false, claude: false, showLanguage: true, startedAt: 1 });
+	const activity = buildActivity({ languageId: 'rust', debugging: false, claude: false, showLanguage: true, startedAt: 1, now: 0 });
 	ipc.setActivity(activity);
 	await waitFor(() => discord.received.length === 2);
 

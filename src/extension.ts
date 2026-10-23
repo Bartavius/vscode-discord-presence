@@ -1,10 +1,13 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
-import { buildActivity } from './activity.ts';
+import { buildActivity, VERB_MS } from './activity.ts';
 import { isClaudeCommand } from './claude.ts';
 import { DiscordIpc, ipcPaths } from './ipc.ts';
 
 const RETRY_MS = 30_000;
+// How long after your last keystroke or click in an editor the presence shows
+// editing instead of Claude.
+const EDIT_IDLE_MS = 60_000;
 const CLIENT_ID = /^\d{17,20}$/;
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -14,6 +17,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	let ipc: DiscordIpc | undefined;
 	let retry: NodeJS.Timeout | undefined;
+	let verbTimer: NodeJS.Timeout | undefined;
+	let editIdle: NodeJS.Timeout | undefined;
+	let editedAt = -Infinity;
 	// Bumped by stop() so callbacks from an older connection attempt are ignored.
 	let generation = 0;
 	// Terminals currently running Claude Code, detected through shell integration.
@@ -27,21 +33,35 @@ export function activate(context: vscode.ExtensionContext): void {
 		status.show();
 	};
 
+	const stopVerbs = () => {
+		clearInterval(verbTimer);
+		verbTimer = undefined;
+	};
+
 	const update = () => {
+		const editing = Date.now() - editedAt < EDIT_IDLE_MS;
+		const claude =
+			!editing && vscode.window.activeTerminal !== undefined && claudeRuns.has(vscode.window.activeTerminal);
 		ipc?.setActivity(
 			buildActivity({
 				languageId: vscode.window.activeTextEditor?.document.languageId,
 				debugging: vscode.debug.activeDebugSession !== undefined,
-				claude: vscode.window.activeTerminal !== undefined && claudeRuns.has(vscode.window.activeTerminal),
+				claude,
 				showLanguage: config().get<boolean>('showLanguage', true),
 				startedAt,
+				now: Date.now(),
 			}),
 		);
+		// Only the focused window rotates, so a background window can't take over the presence.
+		if (!claude || ipc === undefined || !vscode.window.state.focused) stopVerbs();
+		else verbTimer ??= setInterval(update, VERB_MS);
 	};
 
 	const stop = () => {
 		generation++;
 		clearTimeout(retry);
+		clearTimeout(editIdle);
+		stopVerbs();
 		ipc?.close();
 		ipc = undefined;
 	};
@@ -125,9 +145,22 @@ export function activate(context: vscode.ExtensionContext): void {
 			if (claudeRuns.delete(terminal)) update();
 		}),
 		vscode.window.onDidChangeActiveTerminal(update),
+		// Typing or clicking in an editor means you're editing, even with Claude running.
+		// Changes from commands or from files reloading (such as Claude's edits) don't count.
+		vscode.window.onDidChangeTextEditorSelection(({ kind }) => {
+			if (kind !== vscode.TextEditorSelectionChangeKind.Keyboard && kind !== vscode.TextEditorSelectionChangeKind.Mouse) {
+				return;
+			}
+			const wasEditing = Date.now() - editedAt < EDIT_IDLE_MS;
+			editedAt = Date.now();
+			clearTimeout(editIdle);
+			editIdle = setTimeout(update, EDIT_IDLE_MS);
+			if (!wasEditing) update();
+		}),
 		// With several windows open, the focused one sets the presence.
 		vscode.window.onDidChangeWindowState((state) => {
 			if (state.focused) update();
+			else stopVerbs();
 		}),
 	);
 
