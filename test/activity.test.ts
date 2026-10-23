@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildActivity, type PresenceInput } from '../src/activity.ts';
+import { buildActivity, CLAUDE_VERBS, claudeVerb, type PresenceInput, VERB_MS } from '../src/activity.ts';
 
-const base: PresenceInput = { languageId: 'typescript', debugging: false, claude: false, showLanguage: true, startedAt: 1_700_000_000_000 };
+const base: PresenceInput = { languageId: 'typescript', debugging: false, claude: false, showLanguage: true, startedAt: 1_700_000_000_000, now: 0 };
 
 test('sends exactly the allowed fields', () => {
 	assert.deepEqual(buildActivity(base), {
@@ -32,9 +32,16 @@ test('does not forward language IDs that do not look like language IDs', () => {
 	}
 });
 
-test('reports prompting Claude, unless debugging', () => {
-	assert.equal(buildActivity({ ...base, claude: true }).details, 'Prompting Claude');
-	assert.equal(buildActivity({ ...base, claude: true, languageId: undefined }).details, 'Prompting Claude');
-	assert.equal(buildActivity({ ...base, claude: true, showLanguage: false }).details, 'Prompting Claude');
+test('reports Claude, unless debugging', () => {
+	assert.equal(buildActivity({ ...base, claude: true }).details, 'Pondering with Claude-kun');
+	assert.equal(buildActivity({ ...base, claude: true, languageId: undefined }).details, 'Pondering with Claude-kun');
+	assert.equal(buildActivity({ ...base, claude: true, showLanguage: false }).details, 'Pondering with Claude-kun');
 	assert.equal(buildActivity({ ...base, claude: true, debugging: true }).details, 'Debugging a typescript file');
+});
+
+test('rotates the Claude verb every VERB_MS and wraps around', () => {
+	assert.equal(claudeVerb(VERB_MS - 1), CLAUDE_VERBS[0]);
+	assert.equal(claudeVerb(VERB_MS), CLAUDE_VERBS[1]);
+	assert.equal(claudeVerb(VERB_MS * CLAUDE_VERBS.length), CLAUDE_VERBS[0]);
+	assert.equal(new Set(CLAUDE_VERBS).size, CLAUDE_VERBS.length);
 });

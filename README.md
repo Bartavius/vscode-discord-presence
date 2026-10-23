@@ -11,7 +11,7 @@ Discord receives exactly this, and nothing else:
 | No file open | `Idling` |
 | Editing | `Editing a typescript file` (or `Coding` when `showLanguage` is off) |
 | Debugging | `Debugging a typescript file` (or `Debugging`) |
-| Claude Code running in the active terminal | `Prompting Claude` (debugging takes priority) |
+| Claude Code running in the active terminal | `Pondering with Claude-kun`, with the verb changing every 20 seconds. Typing or clicking in a file switches back to editing for 60 seconds, and debugging takes priority. |
 
 It also gets an elapsed-time counter starting from when the window opened, plus your application's `vscode` image.
 
