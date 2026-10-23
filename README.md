@@ -50,6 +50,9 @@ Discord's desktop app must be running, with activity sharing turned on under **U
 
 Commands: **Discord Presence: Toggle** and **Discord Presence: Reconnect**.
 
+## Example
+<img width="461" height="208" alt="Screenshot 2026-10-23 at 1 58 39 PM" src="https://github.com/user-attachments/assets/7dc06e27-ac2f-404d-b755-8d319b61502b" />
+
 ## Development
 
 ```sh
