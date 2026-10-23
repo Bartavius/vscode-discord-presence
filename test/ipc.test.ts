@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import * as net from 'node:net';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -10,9 +10,10 @@ import {
 	encodeFrame,
 	FrameDecoder,
 	ipcPaths,
-	isTrustedSocket,
+	isSafeDirectory,
 	MAX_FRAME_BYTES,
 	Op,
+	resolveTrustedSocket,
 	type Frame,
 } from '../src/ipc.ts';
 
@@ -164,28 +165,43 @@ test('does not call onClose after close()', async () => {
 	await new Promise((resolve) => setTimeout(resolve, 50));
 });
 
-test('only trusts real sockets in directories others cannot write to', async () => {
+test('resolves trusted sockets to their real path', async () => {
 	const discord = await fakeDiscord('trusted', sendReady);
 	const socketPath = path.join(dir, 'trusted');
-	assert.equal(await isTrustedSocket(socketPath), true);
+	const real = realpathSync(socketPath);
+	assert.equal(await resolveTrustedSocket(socketPath), real);
 
 	const link = path.join(dir, 'link');
 	symlinkSync(socketPath, link);
-	assert.equal(await isTrustedSocket(link), false, 'symlink');
+	assert.equal(await resolveTrustedSocket(link), real, 'symlink resolves to the socket it points at');
 
 	const file = path.join(dir, 'plain-file');
 	writeFileSync(file, '');
-	assert.equal(await isTrustedSocket(file), false, 'regular file');
+	assert.equal(await resolveTrustedSocket(file), undefined, 'regular file');
 
 	chmodSync(dir, 0o777);
 	try {
-		assert.equal(await isTrustedSocket(socketPath), false, 'world-writable parent');
+		assert.equal(await resolveTrustedSocket(socketPath), undefined, 'world-writable parent');
 		chmodSync(dir, 0o1777);
-		assert.equal(await isTrustedSocket(socketPath), true, 'sticky world-writable parent, like /tmp');
+		assert.equal(await resolveTrustedSocket(socketPath), real, 'sticky world-writable parent, like /tmp');
 	} finally {
 		chmodSync(dir, 0o700);
 	}
 	await discord.close();
+});
+
+test('only trusts directories owned by root or the current user', () => {
+	const me = 501;
+	const other = 502;
+	const directory = (uid: number, mode: number) => ({ uid, mode, isDirectory: () => true });
+	assert.equal(isSafeDirectory(directory(0, 0o755), me), true, 'root-owned');
+	assert.equal(isSafeDirectory(directory(me, 0o700), me), true, 'mine');
+	assert.equal(isSafeDirectory(directory(0, 0o1777), me), true, 'root-owned sticky, like /tmp');
+	assert.equal(isSafeDirectory(directory(other, 0o755), me), false, 'owned by another user');
+	assert.equal(isSafeDirectory(directory(other, 0o1777), me), false, 'sticky but owned by another user');
+	assert.equal(isSafeDirectory(directory(0, 0o777), me), false, 'world-writable');
+	assert.equal(isSafeDirectory(directory(0, 0o775), me), false, 'group-writable');
+	assert.equal(isSafeDirectory({ uid: me, mode: 0o700, isDirectory: () => false }, me), false, 'not a directory');
 });
 
 test('rejects when no socket exists', async () => {
