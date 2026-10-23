@@ -11,8 +11,11 @@ Discord receives exactly this, and nothing else:
 | No file open | `Idling` |
 | Editing | `Editing a typescript file` (or `Coding` when `showLanguage` is off) |
 | Debugging | `Debugging a typescript file` (or `Debugging`) |
+| Claude Code running in the active terminal | `Prompting Claude` (debugging takes priority) |
 
 It also gets an elapsed-time counter starting from when the window opened, plus your application's `vscode` image.
+
+Claude Code is detected through VS Code's terminal shell integration (on by default for bash, zsh, fish and PowerShell). The extension checks whether a command starts `claude`. The command line itself and its arguments are never sent, only whether Claude is running. A Claude session that was already running when the window opened isn't detected until you start it again.
 
 It never reads or sends file names, paths, workspace or folder names, remote hosts, git branches, or repository URLs. `src/activity.ts` has no input field for any of them, so a setting can't turn them on.
 

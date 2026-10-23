@@ -1,6 +1,7 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { buildActivity } from './activity.ts';
+import { isClaudeCommand } from './claude.ts';
 import { DiscordIpc, ipcPaths } from './ipc.ts';
 
 const RETRY_MS = 30_000;
@@ -15,6 +16,8 @@ export function activate(context: vscode.ExtensionContext): void {
 	let retry: NodeJS.Timeout | undefined;
 	// Bumped by stop() so callbacks from an older connection attempt are ignored.
 	let generation = 0;
+	// Terminals currently running Claude Code, detected through shell integration.
+	const claudeRuns = new Map<vscode.Terminal, vscode.TerminalShellExecution>();
 
 	const config = () => vscode.workspace.getConfiguration('discordPresence');
 
@@ -29,6 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			buildActivity({
 				languageId: vscode.window.activeTextEditor?.document.languageId,
 				debugging: vscode.debug.activeDebugSession !== undefined,
+				claude: vscode.window.activeTerminal !== undefined && claudeRuns.has(vscode.window.activeTerminal),
 				showLanguage: config().get<boolean>('showLanguage', true),
 				startedAt,
 			}),
@@ -107,6 +111,20 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.window.onDidChangeActiveTextEditor(update),
 		vscode.debug.onDidStartDebugSession(update),
 		vscode.debug.onDidTerminateDebugSession(update),
+		vscode.window.onDidStartTerminalShellExecution(({ terminal, execution }) => {
+			if (!isClaudeCommand(execution.commandLine.value)) return;
+			claudeRuns.set(terminal, execution);
+			update();
+		}),
+		vscode.window.onDidEndTerminalShellExecution(({ terminal, execution }) => {
+			if (claudeRuns.get(terminal) !== execution) return;
+			claudeRuns.delete(terminal);
+			update();
+		}),
+		vscode.window.onDidCloseTerminal((terminal) => {
+			if (claudeRuns.delete(terminal)) update();
+		}),
+		vscode.window.onDidChangeActiveTerminal(update),
 		// With several windows open, the focused one sets the presence.
 		vscode.window.onDidChangeWindowState((state) => {
 			if (state.focused) update();

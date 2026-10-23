@@ -3,6 +3,8 @@
 export interface PresenceInput {
 	languageId: string | undefined;
 	debugging: boolean;
+	// True while Claude Code runs in the active terminal.
+	claude: boolean;
 	showLanguage: boolean;
 	startedAt: number;
 }
@@ -29,7 +31,8 @@ export function buildActivity(input: PresenceInput): Activity {
 	};
 }
 
-function describe({ languageId, debugging, showLanguage }: PresenceInput): string {
+function describe({ languageId, debugging, claude, showLanguage }: PresenceInput): string {
+	if (claude && !debugging) return 'Prompting Claude';
 	if (languageId === undefined) return 'Idling';
 	if (!showLanguage || !LANGUAGE_ID.test(languageId)) return debugging ? 'Debugging' : 'Coding';
 	return `${debugging ? 'Debugging' : 'Editing'} a ${languageId} file`;
