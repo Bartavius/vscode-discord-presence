@@ -1,0 +1,83 @@
+{
+	"name": "vscode-discord-presence",
+	"displayName": "Discord Presence (Private)",
+	"description": "Minimal Discord Rich Presence that shares only the language you are editing.",
+	"version": "0.1.0",
+	"publisher": "bartavius",
+	"private": true,
+	"license": "UNLICENSED",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Bartavius/vscode-discord-presence.git"
+	},
+	"packageManager": "pnpm@10.8.0",
+	"engines": {
+		"vscode": "^1.90.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"main": "./dist/extension.cjs",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"extensionKind": [
+		"ui"
+	],
+	"capabilities": {
+		"untrustedWorkspaces": {
+			"supported": true
+		},
+		"virtualWorkspaces": true
+	},
+	"contributes": {
+		"commands": [
+			{
+				"command": "discordPresence.toggle",
+				"title": "Discord Presence: Toggle"
+			},
+			{
+				"command": "discordPresence.reconnect",
+				"title": "Discord Presence: Reconnect"
+			}
+		],
+		"configuration": {
+			"title": "Discord Presence",
+			"properties": {
+				"discordPresence.enabled": {
+					"type": "boolean",
+					"default": true,
+					"scope": "application",
+					"description": "Show your VS Code activity on Discord."
+				},
+				"discordPresence.clientId": {
+					"type": "string",
+					"default": "",
+					"pattern": "^(\\d{17,20})?$",
+					"scope": "application",
+					"markdownDescription": "Application ID of your own Discord application, from the [Developer Portal](https://discord.com/developers/applications). Its name is what Discord shows after \"Playing\"."
+				},
+				"discordPresence.showLanguage": {
+					"type": "boolean",
+					"default": true,
+					"scope": "application",
+					"description": "Include the language of the active file (for example \"typescript\"). When off, Discord shows only \"Coding\" or \"Debugging\"."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.cjs",
+		"typecheck": "tsc --noEmit",
+		"test": "node --test \"test/*.test.ts\"",
+		"check": "pnpm typecheck && pnpm test",
+		"package": "pnpm check && pnpm build && vsce package --no-dependencies --skip-license --out vscode-discord-presence.vsix"
+	},
+	"devDependencies": {
+		"@types/node": "20.19.43",
+		"@types/vscode": "1.90.0",
+		"@vscode/vsce": "3.9.2",
+		"esbuild": "0.28.2",
+		"typescript": "5.9.3"
+	}
+}
