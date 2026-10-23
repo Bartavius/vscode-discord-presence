@@ -20,7 +20,7 @@ It never reads or sends file names, paths, workspace or folder names, remote hos
 
 - **No runtime dependencies.** The shipped bundle uses only `vscode` and Node built-ins (`net`, `crypto`, `fs`, `os`, `path`). It makes no HTTP requests and opens no WebSockets. It only talks to Discord's local socket.
 - **Bounded parsing.** Frames over 64 KB, or that aren't valid JSON, drop the connection instead of being buffered.
-- **Socket ownership check.** On macOS and Linux it skips any `discord-ipc-*` socket that isn't owned by your user account.
+- **Socket trust check.** On macOS and Linux it only connects to a real socket file (not a symlink) owned by your user account. The folder it's in must also be one no other user can write to, or a sticky folder like `/tmp`, so nobody can swap the socket between the check and the connect.
 - **User-only settings.** Every setting is `application`-scoped, so a cloned repo's `.vscode/settings.json` can't change them.
 - **No auto-updates.** It is installed from a local `.vsix` and never published, so nobody else can push an update to you.
 - **Pinned build tools.** Dev dependencies are pinned to exact versions and locked in `pnpm-lock.yaml`. pnpm 10 doesn't run dependency install scripts.

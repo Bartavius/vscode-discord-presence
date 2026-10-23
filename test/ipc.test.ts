@@ -1,11 +1,20 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import * as net from 'node:net';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { after, test } from 'node:test';
 import { buildActivity } from '../src/activity.ts';
-import { DiscordIpc, encodeFrame, FrameDecoder, ipcPaths, MAX_FRAME_BYTES, Op, type Frame } from '../src/ipc.ts';
+import {
+	DiscordIpc,
+	encodeFrame,
+	FrameDecoder,
+	ipcPaths,
+	isTrustedSocket,
+	MAX_FRAME_BYTES,
+	Op,
+	type Frame,
+} from '../src/ipc.ts';
 
 test('encodes the header as opcode and body length, little-endian', () => {
 	const frame = encodeFrame(Op.Frame, { a: 1 });
@@ -153,6 +162,30 @@ test('does not call onClose after close()', async () => {
 	ipc.close();
 	await discord.close();
 	await new Promise((resolve) => setTimeout(resolve, 50));
+});
+
+test('only trusts real sockets in directories others cannot write to', async () => {
+	const discord = await fakeDiscord('trusted', sendReady);
+	const socketPath = path.join(dir, 'trusted');
+	assert.equal(await isTrustedSocket(socketPath), true);
+
+	const link = path.join(dir, 'link');
+	symlinkSync(socketPath, link);
+	assert.equal(await isTrustedSocket(link), false, 'symlink');
+
+	const file = path.join(dir, 'plain-file');
+	writeFileSync(file, '');
+	assert.equal(await isTrustedSocket(file), false, 'regular file');
+
+	chmodSync(dir, 0o777);
+	try {
+		assert.equal(await isTrustedSocket(socketPath), false, 'world-writable parent');
+		chmodSync(dir, 0o1777);
+		assert.equal(await isTrustedSocket(socketPath), true, 'sticky world-writable parent, like /tmp');
+	} finally {
+		chmodSync(dir, 0o700);
+	}
+	await discord.close();
 });
 
 test('rejects when no socket exists', async () => {

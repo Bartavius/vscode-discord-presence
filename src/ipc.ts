@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { lstat, stat } from 'node:fs/promises';
 import * as net from 'node:net';
 import * as path from 'node:path';
 import type { Activity } from './activity.ts';
@@ -134,7 +134,7 @@ export class DiscordIpc {
 
 async function openFirst(paths: readonly string[]): Promise<net.Socket | undefined> {
 	for (const candidate of paths) {
-		if (!(await ownedByCurrentUser(candidate))) continue;
+		if (!(await isTrustedSocket(candidate))) continue;
 		const socket = await new Promise<net.Socket | undefined>((resolve) => {
 			const attempt = net.createConnection(candidate);
 			attempt.once('connect', () => resolve(attempt));
@@ -148,12 +148,18 @@ async function openFirst(paths: readonly string[]): Promise<net.Socket | undefin
 	return undefined;
 }
 
-// On Unix, skip sockets owned by another user, such as a planted
-// /tmp/discord-ipc-0 on a shared machine.
-async function ownedByCurrentUser(candidate: string): Promise<boolean> {
+// On Unix, only connect to a real socket (not a symlink) owned by this user,
+// in a directory where no other user can swap the entry before connect().
+// This rules out a planted or re-pointed /tmp/discord-ipc-0 on a shared machine.
+export async function isTrustedSocket(candidate: string): Promise<boolean> {
 	if (process.platform === 'win32') return true;
 	try {
-		return (await stat(candidate)).uid === process.getuid?.();
+		const entry = await lstat(candidate);
+		if (!entry.isSocket() || entry.uid !== process.getuid?.()) return false;
+		const { mode } = await stat(path.dirname(candidate));
+		const writableByOthers = (mode & 0o022) !== 0;
+		const sticky = (mode & 0o1000) !== 0;
+		return !writableByOthers || sticky;
 	} catch {
 		return false;
 	}
